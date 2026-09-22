@@ -1,0 +1,8 @@
+name = "pastebin-proxy"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "axom-keys"
+database_id = "33598f6f-12af-4ba2-8df0-4440e8405feb"
