@@ -6,4 +6,4 @@ CREATE TABLE IF NOT EXISTS issued (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_issued_ip ON issued(ip, created_at);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_issued_hash ON issued(hash)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_issued_hash ON issued(hash);
