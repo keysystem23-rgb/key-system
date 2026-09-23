@@ -25,7 +25,7 @@ export default {
       return new Response(text, {
         status: res.status,
         headers: {
-          ...corsHeaders,
+          ...corsHeaders,if (!hash || !/^[0-9a-f]{64}$/i.test(hash)) {
           "Content-Type": "text/plain;charset=UTF-8",
           "Cache-Control": "public, max-age=60",
         },
@@ -78,7 +78,7 @@ export default {
       try {
         const { hash } = await request.json();
 
-        if (!hash || !/^[0-9a-f]{64}$/i.test(hash)) {
+        if (!hash || !/^[A-Za-z0-9]{64}$/.test(hash)) {
           return json({
             success: false,
             error: "Missing or malformed hash",
