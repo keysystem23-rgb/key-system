@@ -77,8 +77,15 @@ export default {
     if (request.method === "POST" && url.pathname === "/verify") {
       try {
         const { hash } = await request.json();
+
         if (!hash || !/^[0-9a-f]{64}$/i.test(hash)) {
-          return json({ success: false, error: "Missing or malformed hash" }, 400, corsHeaders);
+          return json({
+            success: false,
+            error: "Missing or malformed hash",
+            debug_received: hash ?? null,
+            debug_length: hash ? String(hash).length : 0,
+            debug_type: typeof hash,
+          }, 400, corsHeaders);
         }
 
         const ip = request.headers.get("CF-Connecting-IP") || "unknown";
@@ -126,7 +133,6 @@ export default {
 
     // ============================================================
     // ROUTE 4: Everything else → serve static files from /public
-    //   (index.html, style.css, storm-song.mp3, etc.)
     // ============================================================
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
@@ -166,7 +172,5 @@ async function verifyLinkvertise(env, hash) {
   if (!res.ok) return false;
 
   const text = (await res.text()).trim();
-  // Linkvertise returns plain-text "TRUE" on success, "FALSE" on failure,
-  // or "Invalid token." if the token is wrong.
   return text === "TRUE";
 }
