@@ -25,7 +25,7 @@ export default {
       return new Response(text, {
         status: res.status,
         headers: {
-          ...corsHeaders,if (!hash || !/^[0-9a-f]{64}$/i.test(hash)) {
+          ...corsHeaders,
           "Content-Type": "text/plain;charset=UTF-8",
           "Cache-Control": "public, max-age=60",
         },
