@@ -140,12 +140,40 @@
 
     // ---- On load: catch Linkvertise redirect back with ?hash=... ----
     (async function onLoad(){
+      // FULL DEBUG: log everything we know about the URL
+      console.log("[onLoad] full URL:", location.href);
+      console.log("[onLoad] search:", JSON.stringify(location.search));
+      console.log("[onLoad] hash (URL fragment):", JSON.stringify(location.hash));
+
       const params = new URLSearchParams(location.search);
       const hash   = params.get("hash");
 
-      if (!hash) { show("start"); return; }
+      console.log("[onLoad] params:", Object.fromEntries(params.entries()));
+      console.log("[onLoad] hash value:", JSON.stringify(hash), "type:", typeof hash, "length:", hash ? hash.length : 0);
 
-      // Remove hash from the URL bar immediately
+      if (!hash) {
+        // Show the user what actually arrived, so we can diagnose
+        alert(
+          "No ?hash= parameter was found.\n\n" +
+          "Full query string: " + JSON.stringify(location.search) + "\n\n" +
+          "Full URL: " + location.href
+        );
+        show("start");
+        return;
+      }
+
+      if (!/^[0-9a-f]{64}$/i.test(hash)) {
+        alert(
+          "Hash is present but malformed.\n\n" +
+          "Value: " + JSON.stringify(hash) + "\n" +
+          "Length: " + hash.length + "\n" +
+          "Expected: 64 hex chars"
+        );
+        show("start");
+        return;
+      }
+
+      // Clean up the URL bar
       history.replaceState({}, "", location.pathname);
 
       show("verifying");
@@ -158,16 +186,27 @@
         });
         const data = await res.json().catch(() => ({}));
 
+        console.log("[verify] status:", res.status, "body:", data);
+
         if (data.success && data.key) {
           state.key      = data.key;
           state.linkDone = true;
           show("key");
         } else {
-          alert(data.error || "Verification failed. Please try the sponsor step again.");
+          alert(
+            "Verification failed.\n\n" +
+            "Status: " + res.status + "\n" +
+            "Error: " + (data.error || "unknown") +
+            (data.debug_received !== undefined
+              ? "\n\nDebug:\nReceived: " + JSON.stringify(data.debug_received) +
+                "\nLength: " + data.debug_length +
+                "\nType: " + data.debug_type
+              : "")
+          );
           show("start");
         }
       } catch (err) {
-        alert("Could not reach the key server. Check your connection and try again.");
+        alert("Could not reach the key server.\n\n" + err.message);
         show("start");
       }
     })();
@@ -179,8 +218,6 @@
 
     document.querySelector('[data-action="link"]').onclick = () => {
       if (state.linkDone) return;
-      // Linkvertise appends ?hash=... to the return URL automatically
-      // when anti-bypassing is enabled on the link's target.
       window.open(LINKVERTISE_URL, "_blank", "noopener");
     };
 
