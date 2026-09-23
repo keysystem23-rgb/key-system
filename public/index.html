@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Storm Hub — Key System</title>
+  <style>
+    :root{
+      --bg:#0e1016; --card:#161a24; --input:#11151d; --stroke:#252b3a;
+      --text:#e6e9f2; --muted:#7a8296; --accent:#7cc9ff; --accent2:#a78bfa;
+      --dark:#0a0d13; --success:#6ee7a8; --warn:#f5b566;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{
+      display:grid;place-items:center;padding:24px;
+      background:
+        radial-gradient(800px 400px at 85% -10%, rgba(124,201,255,.12), transparent 65%),
+        radial-gradient(700px 500px at -10% 110%, rgba(167,139,250,.10), transparent 65%),
+        var(--bg);
+      color:var(--text);
+      font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      -webkit-font-smoothing:antialiased;
+      overflow:hidden;
+    }
+    .storm{position:fixed;inset:0;pointer-events:none;z-index:0;background-image:radial-gradient(1.5px 1.5px at 20% 30%, rgba(124,201,255,.35), transparent),radial-gradient(1.5px 1.5px at 70% 60%, rgba(167,139,250,.30), transparent),radial-gradient(1.5px 1.5px at 40% 80%, rgba(124,201,255,.25), transparent),radial-gradient(1.5px 1.5px at 90% 15%, rgba(167,139,250,.30), transparent);animation:drift 18s linear infinite}
+    @keyframes drift{0%{transform:translateY(0)}100%{transform:translateY(-20px)}}
+    .card{position:relative;z-index:1;width:100%;max-width:460px;background:var(--card);border:1px solid var(--stroke);border-radius:16px;padding:26px 24px 24px;box-shadow:0 24px 60px rgba(0,0,0,.6);animation:cardIn .5s cubic-bezier(.2,.8,.2,1)}
+    @keyframes cardIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    .brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}.brand-mark{width:40px;height:40px;border-radius:12px;background:linear-gradient(150deg,var(--accent),var(--accent2));box-shadow:0 0 24px rgba(124,201,255,.4);display:grid;place-items:center;font-size:20px;color:var(--dark);animation:pulse 3s ease-in-out infinite}@keyframes pulse{0%,100%{box-shadow:0 0 24px rgba(124,201,255,.4)}50%{box-shadow:0 0 36px rgba(124,201,255,.65)}}
+    .brand-name{font-size:19px;font-weight:800;letter-spacing:-.3px}.brand-sub{font-size:12px;color:var(--muted);margin-top:1px}h1{font-size:22px;font-weight:700;letter-spacing:-.3px;margin-bottom:6px}p.lead{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px}
+    .btn{width:100%;padding:12px 16px;border:0;border-radius:10px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;transition:filter .15s,background .15s,opacity .15s}.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--dark)}.btn-primary:hover{filter:brightness(1.1)}.btn-primary:disabled{opacity:.35;cursor:not-allowed;filter:none}
+    .tasks{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}.task{display:flex;align-items:center;gap:12px;background:var(--input);border:1px solid var(--stroke);border-radius:11px;padding:12px;transition:border-color .2s}.task.done{border-color:rgba(110,231,168,.35)}.task-icon{flex:0 0 32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--card);border:1px solid var(--stroke);font-size:14px;transition:color .2s,border-color .2s}.task.done .task-icon{color:var(--success);border-color:rgba(110,231,168,.4)}.task-body{flex:1;min-width:0}.task-title{font-size:13px;font-weight:600}.task-sub{font-size:11px;color:var(--muted);margin-top:2px}.task-btn{flex:0 0 auto;padding:8px 14px;border-radius:8px;border:1px solid var(--stroke);background:var(--card);color:var(--text);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;transition:background .15s,opacity .15s}.task-btn:hover:not(:disabled){background:#1d2330}.task-btn:disabled{opacity:.4;cursor:default}
+    .keybox{display:flex;align-items:center;gap:10px;background:var(--input);border:1px solid var(--stroke);border-radius:11px;padding:14px;margin-bottom:14px}.keytext{flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;letter-spacing:.6px;color:var(--accent);word-break:break-all}.hint{font-size:11.5px;color:var(--muted);line-height:1.6}.hint b{color:var(--text);font-weight:600}.hidden{display:none}.footer{margin-top:18px;font-size:11px;color:var(--muted);text-align:center}.music-btn{position:fixed;top:18px;right:18px;z-index:2;width:42px;height:42px;border-radius:50%;background:var(--card);border:1px solid var(--stroke);color:var(--text);font-size:16px;cursor:pointer;display:grid;place-items:center;transition:background .15s,transform .15s}.music-btn:hover{background:#1d2330;transform:scale(1.06)}.music-btn.playing{color:var(--accent);border-color:var(--accent)}
+    .spinner{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <div class="storm"></div>
+  <button class="music-btn" id="music-toggle" title="Toggle music">♪</button>
+  <audio id="bg-music" loop preload="auto" src="./storm-song.mp3"></audio>
+  <div class="card">
+    <div class="brand">
+      <div class="brand-mark">⚡</div>
+      <div>
+        <div class="brand-name">Storm Hub</div>
+        <div class="brand-sub">Key System</div>
+      </div>
+    </div>
+
+    <section id="view-start">
+      <h1>Get your key</h1>
+      <p class="lead">Complete one quick sponsor step and you'll be handed a key you can paste straight into the Roblox UI.</p>
+      <button class="btn btn-primary" id="btn-start">Start</button>
+    </section>
+
+    <section id="view-tasks" class="hidden">
+      <h1>Tasks</h1>
+      <p class="lead">Finish the required step below, then reveal your key.</p>
+      <div class="tasks">
+        <div class="task" id="task-discord">
+          <div class="task-icon">◇</div>
+          <div class="task-body">
+            <div class="task-title">Join the Discord</div>
+            <div class="task-sub">Optional · updates &amp; support</div>
+          </div>
+          <button class="task-btn" data-action="discord">Open</button>
+        </div>
+        <div class="task" id="task-link">
+          <div class="task-icon">◆</div>
+          <div class="task-body">
+            <div class="task-title">Complete the sponsor step</div>
+            <div class="task-sub">Required · opens Linkvertise</div>
+          </div>
+          <button class="task-btn" data-action="link">Open</button>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-reveal" disabled>Reveal key</button>
+    </section>
+
+    <section id="view-verifying" class="hidden">
+      <h1>Verifying…</h1>
+      <p class="lead"><span class="spinner"></span>Checking your sponsor step. This takes a second.</p>
+    </section>
+
+    <section id="view-key" class="hidden">
+      <h1>Your key</h1>
+      <p class="lead">Copy it and paste it into the License key box in-game.</p>
+      <div class="keybox">
+        <div class="keytext" id="key-text">—</div>
+      </div>
+      <button class="btn btn-primary" id="btn-copy">Copy key</button>
+      <p class="hint" style="margin-top:14px"><b>Note:</b> if verification failed, go back and finish the sponsor step completely.</p>
+      <button class="btn btn-primary" id="btn-restart" style="margin-top:10px;background:transparent;border:1px solid var(--stroke);color:var(--text)">Get another key</button>
+    </section>
+
+    <div class="footer">stormhub</div>
+  </div>
+
+  <script>
+    // ============ CONFIG ============
+    const WORKER_URL      = "https://key-system.keysystem23-460.workers.dev";
+    const LINKVERTISE_URL = "https://linkvertise.com/9531685/tO0elzSsXZJ8";
+    const DISCORD_URL     = "1";
+    // ================================
+
+    const views = {
+      start:     document.getElementById("view-start"),
+      tasks:     document.getElementById("view-tasks"),
+      verifying: document.getElementById("view-verifying"),
+      key:       document.getElementById("view-key"),
+    };
+
+    const state = { linkDone:false, discordDone:false, key:null };
+
+    function show(name){
+      for (const [k,el] of Object.entries(views)) el.classList.toggle("hidden", k !== name);
+      if (name === "tasks") refreshTasks();
+      if (name === "key")   document.getElementById("key-text").textContent = state.key || "—";
+    }
+
+    function refreshTasks(){
+      const linkTask    = document.getElementById("task-link");
+      const discordTask = document.getElementById("task-discord");
+
+      linkTask.classList.toggle("done", state.linkDone);
+      discordTask.classList.toggle("done", state.discordDone);
+
+      const linkBtn = linkTask.querySelector(".task-btn");
+      linkBtn.textContent = state.linkDone ? "Done" : "Open";
+      linkBtn.disabled    = state.linkDone;
+
+      const discordBtn = discordTask.querySelector(".task-btn");
+      discordBtn.textContent = state.discordDone ? "Done" : "Open";
+      discordBtn.disabled    = state.discordDone;
+
+      document.getElementById("btn-reveal").disabled = !state.linkDone || !!state.key;
+    }
+
+    // ---- On load: catch Linkvertise redirect back with ?hash=... ----
+    (async function onLoad(){
+      const params = new URLSearchParams(location.search);
+      const hash   = params.get("hash");
+
+      if (!hash) { show("start"); return; }
+
+      // Remove hash from the URL bar immediately
+      history.replaceState({}, "", location.pathname);
+
+      show("verifying");
+
+      try {
+        const res = await fetch(WORKER_URL + "/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hash }),
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (data.success && data.key) {
+          state.key      = data.key;
+          state.linkDone = true;
+          show("key");
+        } else {
+          alert(data.error || "Verification failed. Please try the sponsor step again.");
+          show("start");
+        }
+      } catch (err) {
+        alert("Could not reach the key server. Check your connection and try again.");
+        show("start");
+      }
+    })();
+
+    document.getElementById("btn-start").onclick = () => {
+      if (state.key) return show("key");
+      show("tasks");
+    };
+
+    document.querySelector('[data-action="link"]').onclick = () => {
+      if (state.linkDone) return;
+      // Linkvertise appends ?hash=... to the return URL automatically
+      // when anti-bypassing is enabled on the link's target.
+      window.open(LINKVERTISE_URL, "_blank", "noopener");
+    };
+
+    document.querySelector('[data-action="discord"]').onclick = () => {
+      state.discordDone = true;
+      window.open(DISCORD_URL, "_blank", "noopener");
+      refreshTasks();
+    };
+
+    document.getElementById("btn-reveal").onclick = () => {
+      if (state.key) return show("key");
+      alert("Finish the sponsor step first, then come back to this tab.");
+    };
+
+    document.getElementById("btn-copy").onclick = async () => {
+      const btn = document.getElementById("btn-copy");
+      try {
+        await navigator.clipboard.writeText(state.key || "");
+        btn.textContent = "Copied!";
+      } catch {
+        btn.textContent = "Copy failed — select manually";
+      }
+      setTimeout(() => (btn.textContent = "Copy key"), 1600);
+    };
+
+    document.getElementById("btn-restart").onclick = () => {
+      state.key      = null;
+      state.linkDone = false;
+      show("start");
+    };
+
+    // ---- Background music ----
+    (function music(){
+      const audio = document.getElementById("bg-music");
+      const btn   = document.getElementById("music-toggle");
+      let started = false;
+
+      function tryStart(){
+        if (started) return;
+        started = true;
+        audio.volume = 0.35;
+        audio.play().then(() => btn.classList.add("playing")).catch(() => {});
+        document.removeEventListener("click", tryStart);
+      }
+      document.addEventListener("click", tryStart);
+
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (audio.paused){
+          audio.play().then(() => btn.classList.add("playing")).catch(()=>{});
+        } else {
+          audio.pause();
+          btn.classList.remove("playing");
+        }
+      });
+
+      audio.addEventListener("error", () => { btn.style.display = "none"; });
+    })();
+  </script>
+</body>
+</html>
