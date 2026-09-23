@@ -83,7 +83,7 @@ export default {
 
         const ip = request.headers.get("CF-Connecting-IP") || "unknown";
 
-        // Optional rate limit: 1 key per IP per 10 min
+        // Rate limit: 1 key per IP per 10 min (only if DB is bound)
         if (env.DB) {
           const recent = await env.DB.prepare(
             "SELECT created_at FROM issued WHERE ip = ? ORDER BY created_at DESC LIMIT 1"
@@ -124,6 +124,14 @@ export default {
       }
     }
 
+    // ============================================================
+    // ROUTE 4: Everything else → serve static files from /public
+    //   (index.html, style.css, storm-song.mp3, etc.)
+    // ============================================================
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+
     return new Response("Not found", { status: 404, headers: corsHeaders });
   },
 };
@@ -159,6 +167,6 @@ async function verifyLinkvertise(env, hash) {
 
   const text = (await res.text()).trim();
   // Linkvertise returns plain-text "TRUE" on success, "FALSE" on failure,
-  // or an error string like "Invalid token." for misconfigured tokens.
+  // or "Invalid token." if the token is wrong.
   return text === "TRUE";
 }

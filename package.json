@@ -8,7 +8,7 @@
     "db:init": "wrangler d1 execute axom-keys --remote --file=./schema.sql"
   },
   "devDependencies": {
-    "wrangler": "^3.90.0"
+    "wrangler": "^4.0.0"
   }
 }
 
