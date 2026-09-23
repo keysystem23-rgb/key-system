@@ -162,7 +162,7 @@
         return;
       }
 
-      if (!/^[0-9a-f]{64}$/i.test(hash)) {
+      if (!/^[A-Za-z0-9]{64}$/.test(hash)) {
         alert(
           "Hash is present but malformed.\n\n" +
           "Value: " + JSON.stringify(hash) + "\n" +
