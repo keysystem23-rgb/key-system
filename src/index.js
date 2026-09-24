@@ -157,6 +157,85 @@ export default {
     }
 
     // ============================================================
+    // ROUTE 6: POST /track  → log user session info from Luau
+    // ============================================================
+    if (request.method === "POST" && url.pathname === "/track") {
+      try {
+        const body = await request.json();
+        const {
+          username = null,
+          display_name = null,
+          key = null,
+          hwid = null,
+          place_id = null,
+          game_id = null,
+          elapsed_seconds = 0,
+          is_start = false,
+        } = body;
+
+        if (!key || !hwid || place_id === null || game_id === null) {
+          return json({ ok: false, error: "Missing required fields" }, 400, corsHeaders);
+        }
+
+        if (!env.DB) {
+          return json({ ok: false, error: "DB not configured" }, 500, corsHeaders);
+        }
+
+        // Cloudflare provides these without any client input
+        const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+        const country = (request.cf && request.cf.country) || "XX";
+
+        const now = Date.now();
+        const elapsed = Math.max(0, Math.floor(Number(elapsed_seconds) || 0));
+        const executionDelta = is_start ? 1 : 0;
+
+        // UPSERT: insert new row, or increment existing one
+        await env.DB.prepare(`
+          INSERT INTO sessions
+            (username, display_name, ip, country, key_used, hwid, place_id, game_id,
+             executions, total_seconds, first_seen, last_seen)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(key_used, hwid, place_id) DO UPDATE SET
+            username      = COALESCE(excluded.username, sessions.username),
+            display_name  = COALESCE(excluded.display_name, sessions.display_name),
+            ip            = excluded.ip,
+            country       = excluded.country,
+            executions    = sessions.executions + ?,
+            total_seconds = sessions.total_seconds + ?,
+            last_seen     = excluded.last_seen
+        `).bind(
+          username, display_name, ip, country, key, String(hwid),
+          Number(place_id), Number(game_id),
+          executionDelta, elapsed, now, now,
+          executionDelta, elapsed
+        ).run();
+
+        return json({ ok: true }, 200, corsHeaders);
+      } catch (err) {
+        return json({ ok: false, error: err.message }, 500, corsHeaders);
+      }
+    }
+
+    // ============================================================
+    // ROUTE 7: GET /sessions  → view all logged sessions
+    //   Requires ?token=ADMIN_TOKEN matching env.ADMIN_TOKEN
+    // ============================================================
+    if (request.method === "GET" && url.pathname === "/sessions") {
+      const token = url.searchParams.get("token");
+      if (!env.ADMIN_TOKEN || token !== env.ADMIN_TOKEN) {
+        return json({ error: "Unauthorized" }, 401, corsHeaders);
+      }
+      try {
+        const { results } = await env.DB.prepare(
+          "SELECT * FROM sessions ORDER BY last_seen DESC LIMIT 500"
+        ).all();
+        return json({ count: results.length, sessions: results }, 200, corsHeaders);
+      } catch (err) {
+        return json({ error: err.message }, 500, corsHeaders);
+      }
+    }
+
+    // ============================================================
     // ROUTE 4: Everything else → serve static files from /public
     // ============================================================
     if (env.ASSETS) {
