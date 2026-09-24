@@ -134,6 +134,7 @@ export default {
     // ============================================================
     // ROUTE 5: POST /validate  → check if a key exists in D1
     //   Body: { key: "STORM-XXXX-XXXX-XXXX" }
+    //   Also accepts env.MASTER_KEY (bypasses D1 entirely)
     // ============================================================
     if (request.method === "POST" && url.pathname === "/validate") {
       try {
@@ -142,13 +143,20 @@ export default {
           return json({ valid: false, error: "Missing key" }, 400, corsHeaders);
         }
 
+        const trimmed = key.trim();
+
+        // Master key check — bypasses D1 entirely
+        if (env.MASTER_KEY && trimmed === env.MASTER_KEY) {
+          return json({ valid: true, master: true }, 200, corsHeaders);
+        }
+
         if (!env.DB) {
           return json({ valid: false, error: "DB not configured" }, 500, corsHeaders);
         }
 
         const row = await env.DB.prepare(
           "SELECT key FROM issued WHERE key = ? LIMIT 1"
-        ).bind(key.trim()).first();
+        ).bind(trimmed).first();
 
         return json({ valid: !!row }, 200, corsHeaders);
       } catch (err) {
