@@ -132,6 +132,31 @@ export default {
     }
 
     // ============================================================
+    // ROUTE 5: POST /validate  → check if a key exists in D1
+    //   Body: { key: "STORM-XXXX-XXXX-XXXX" }
+    // ============================================================
+    if (request.method === "POST" && url.pathname === "/validate") {
+      try {
+        const { key } = await request.json();
+        if (!key || typeof key !== "string") {
+          return json({ valid: false, error: "Missing key" }, 400, corsHeaders);
+        }
+
+        if (!env.DB) {
+          return json({ valid: false, error: "DB not configured" }, 500, corsHeaders);
+        }
+
+        const row = await env.DB.prepare(
+          "SELECT key FROM issued WHERE key = ? LIMIT 1"
+        ).bind(key.trim()).first();
+
+        return json({ valid: !!row }, 200, corsHeaders);
+      } catch (err) {
+        return json({ valid: false, error: err.message }, 500, corsHeaders);
+      }
+    }
+
+    // ============================================================
     // ROUTE 4: Everything else → serve static files from /public
     // ============================================================
     if (env.ASSETS) {
