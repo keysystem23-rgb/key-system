@@ -5,7 +5,7 @@ export default {
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, X-Admin-Token",
     };
 
     if (request.method === "OPTIONS") {
@@ -173,6 +173,9 @@ export default {
         const {
           username = null,
           display_name = null,
+          user_id = null,
+          executor = null,
+          account_age = null,
           key = null,
           hwid = null,
           place_id = null,
@@ -197,22 +200,29 @@ export default {
         const elapsed = Math.max(0, Math.floor(Number(elapsed_seconds) || 0));
         const executionDelta = is_start ? 1 : 0;
 
+        // Normalize numeric fields (accept null cleanly)
+        const userId = user_id === null || user_id === undefined ? null : Number(user_id);
+        const accountAge = account_age === null || account_age === undefined ? null : Number(account_age);
+
         // UPSERT: insert new row, or increment existing one
         await env.DB.prepare(`
           INSERT INTO sessions
-            (username, display_name, ip, country, key_used, hwid, place_id, game_id,
-             executions, total_seconds, first_seen, last_seen)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (username, display_name, user_id, executor, account_age, ip, country, key_used, hwid,
+             place_id, game_id, executions, total_seconds, first_seen, last_seen)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(key_used, hwid, place_id) DO UPDATE SET
             username      = COALESCE(excluded.username, sessions.username),
             display_name  = COALESCE(excluded.display_name, sessions.display_name),
+            user_id       = COALESCE(excluded.user_id, sessions.user_id),
+            executor      = COALESCE(excluded.executor, sessions.executor),
+            account_age   = COALESCE(excluded.account_age, sessions.account_age),
             ip            = excluded.ip,
             country       = excluded.country,
             executions    = sessions.executions + ?,
             total_seconds = sessions.total_seconds + ?,
             last_seen     = excluded.last_seen
         `).bind(
-          username, display_name, ip, country, key, String(hwid),
+          username, display_name, userId, executor, accountAge, ip, country, key, String(hwid),
           Number(place_id), Number(game_id),
           executionDelta, elapsed, now, now,
           executionDelta, elapsed
@@ -238,6 +248,98 @@ export default {
           "SELECT * FROM sessions ORDER BY last_seen DESC LIMIT 500"
         ).all();
         return json({ count: results.length, sessions: results }, 200, corsHeaders);
+      } catch (err) {
+        return json({ error: err.message }, 500, corsHeaders);
+      }
+    }
+
+    // ============================================================
+    // ROUTE 8: POST /admin/upload-lua?name=XXX  → store Lua in D1
+    //   Header: X-Admin-Token: <ADMIN_TOKEN>
+    //   Body: raw Lua source
+    // ============================================================
+    if (request.method === "POST" && url.pathname === "/admin/upload-lua") {
+      const auth = request.headers.get("X-Admin-Token");
+      if (!env.ADMIN_TOKEN || auth !== env.ADMIN_TOKEN) {
+        return json({ error: "Unauthorized" }, 401, corsHeaders);
+      }
+      const name = url.searchParams.get("name");
+      if (!name || !/^[A-Za-z0-9_-]{1,64}$/.test(name)) {
+        return json({ error: "Invalid name" }, 400, corsHeaders);
+      }
+      const content = await request.text();
+      if (!content || content.length < 10) {
+        return json({ error: "Empty content" }, 400, corsHeaders);
+      }
+      if (content.length > 500_000) {
+        return json({ error: "Too large (max 500 KB)" }, 413, corsHeaders);
+      }
+      if (!env.DB) {
+        return json({ error: "DB not configured" }, 500, corsHeaders);
+      }
+      await env.DB.prepare(
+        `INSERT INTO scripts (name, content, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(name) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at`
+      ).bind(name, content, Date.now()).run();
+      return json({ ok: true, name, size: content.length }, 200, corsHeaders);
+    }
+
+    // ============================================================
+    // ROUTE 9: GET /lua/:name?key=SCRIPT_TOKEN  → serve gated Lua
+    //   Also logs the fetch to `downloads` (best-effort, non-blocking)
+    // ============================================================
+    if (request.method === "GET" && url.pathname.startsWith("/lua/")) {
+      const name = url.pathname.slice(5);
+      const key = url.searchParams.get("key");
+      if (!env.SCRIPT_TOKEN || key !== env.SCRIPT_TOKEN) {
+        return new Response("Not found", { status: 404, headers: corsHeaders });
+      }
+      if (!env.DB) {
+        return new Response("Server error", { status: 500, headers: corsHeaders });
+      }
+
+      // Best-effort download log — never blocks or fails the response
+      try {
+        await env.DB.prepare(
+          "INSERT INTO downloads (name, ip, country, ua, at) VALUES (?, ?, ?, ?, ?)"
+        ).bind(
+          name,
+          request.headers.get("CF-Connecting-IP") || "unknown",
+          (request.cf && request.cf.country) || "XX",
+          request.headers.get("User-Agent") || "",
+          Date.now()
+        ).run();
+      } catch (_) { /* ignore logging failures */ }
+
+      const row = await env.DB.prepare(
+        "SELECT content FROM scripts WHERE name = ?"
+      ).bind(name).first();
+      if (!row) {
+        return new Response("Not found", { status: 404, headers: corsHeaders });
+      }
+      return new Response(row.content, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/plain;charset=UTF-8",
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    // ============================================================
+    // ROUTE 10: GET /downloads?token=ADMIN_TOKEN  → view fetch log
+    // ============================================================
+    if (request.method === "GET" && url.pathname === "/downloads") {
+      const token = url.searchParams.get("token");
+      if (!env.ADMIN_TOKEN || token !== env.ADMIN_TOKEN) {
+        return json({ error: "Unauthorized" }, 401, corsHeaders);
+      }
+      try {
+        const { results } = await env.DB.prepare(
+          "SELECT * FROM downloads ORDER BY at DESC LIMIT 500"
+        ).all();
+        return json({ count: results.length, downloads: results }, 200, corsHeaders);
       } catch (err) {
         return json({ error: err.message }, 500, corsHeaders);
       }
